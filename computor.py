@@ -14,141 +14,136 @@ import sys
 import re
 from fractions import Fraction
 
-def normalize_expression(expression):
+def validate_equation(equation):
     """
-    Convert free-form expressions to standard form (bonus part)
-    
-    Transforms expressions like "5 + 4X + X^2" into "5 * X^0 + 4 * X^1 + 1 * X^2"
-    
-    Handles:
-    - Coefficients adjacent to X (5X → 5 * X)
-    - Missing powers (X → X^1)
-    - Standalone numbers (5 → 5 * X^0)
-    - Mixed case (x → X)
+    Validate if the equation follows the required format.
+    - Must have exactly one equals sign
+    - Must only contain allowed characters: digits, X/x, +, -, *, ^, spaces
+    - Powers must be non-negative integers
     """
-    # Replace patterns like "5X" with "5 * X"
-    expression = re.sub(r'(\d+)([Xx])', r'\1 * \2', expression)
+    # Check for exactly one equals sign
+    if equation.count('=') != 1:
+        raise ValueError("Equation must contain exactly one equals sign")
     
-    # Replace "X" with "X^1" and add " * X^0" to standalone numbers
-    parts = []
-    for term in re.split(r'([+-])', expression):
-        term = term.strip()
-        if not term:
-            continue
+    # Validate characters
+    valid_chars = set("0123456789.+-*/^xX= \t\n")
+    for char in equation:
+        if char not in valid_chars:
+            raise ValueError(f"Invalid character in equation: '{char}'")
             
-        if term in "+-":
-            parts.append(term)
-            continue
-            
-        if 'X' in term or 'x' in term:
-            # Standardize to uppercase X
-            term = term.replace('x', 'X')
-            
-            # Add power if missing
-            if not re.search(r'X\^', term):
-                term = term.replace('X', 'X^1')
-                
-            parts.append(term)
-        else:
-            # It's a constant term, add * X^0
+    return True
+
+def parse_term(term):
+    """
+    Parse a single term like "5*X^2", "-X^3", or "42" into coefficient and power.
+    Returns (coefficient, power) tuple.
+    """
+    # Handle empty terms
+    if not term.strip():
+        return None
+    
+    # Determine sign
+    sign = 1
+    if term.startswith('-'):
+        sign = -1
+        term = term[1:].strip()
+    elif term.startswith('+'):
+        term = term[1:].strip()
+    
+    # Handle constants (no variable)
+    if 'x' not in term.lower():
+        try:
+            return (sign * float(term), 0)
+        except ValueError:
+            raise ValueError(f"Invalid constant term: {term}")
+    
+    # Handle terms with variables
+    coefficient = sign
+    power = 1  # Default power
+    
+    # Extract coefficient
+    if '*' in term:
+        parts = term.split('*', 1)
+        if parts[0].strip():
             try:
-                float(term)  # Check if it's a number
-                parts.append(f"{term} * X^0")
+                coefficient = sign * float(parts[0].strip())
             except ValueError:
-                parts.append(term)  # Keep as is if not a number
+                raise ValueError(f"Invalid coefficient: {parts[0]}")
+        term = parts[1].strip()
+    elif term.lower() != 'x' and term.lower()[0] not in 'x':
+        # Handle format like "5x" without *
+        match = re.match(r'^(\d+\.?\d*)([xX].*)', term)
+        if match:
+            coefficient = sign * float(match.group(1))
+            term = match.group(2)
     
-    return ''.join(parts)
+    # Validate that term starts with x/X now
+    if not term.lower().startswith('x'):
+        raise ValueError(f"Invalid term format: {term}")
+    
+    # Extract power
+    if '^' in term:
+        parts = term.split('^', 1)
+        try:
+            power = int(parts[1].strip())
+            if power < 0:
+                raise ValueError("Negative powers are not supported")
+        except ValueError:
+            raise ValueError(f"Invalid power: {parts[1]}")
+    
+    return (coefficient, power)
 
 def parse_expression(expression):
     """
-    Parse an expression like '5 * X^0 + 4 * X^1 - 9.3 * X^2'
-    
-    This method:
-    1. Normalizes the expression using _normalize_expression()
-    2. Splits the expression into individual terms
-    3. Extracts the coefficient and power from each term
-    4. Builds a dictionary mapping powers to their coefficients
-    
-    Returns a dictionary where keys are powers and values are coefficients
+    Parse a polynomial expression into a dictionary mapping powers to coefficients.
     """
+    # Remove all spaces
+    expression = expression.replace(" ", "")
+    
+    # Add + sign at beginning if needed
+    if expression and expression[0] not in ['+', '-']:
+        expression = '+' + expression
+    
+    # Split into terms
+    terms = []
+    i = 0
+    while i < len(expression):
+        if expression[i] in ['+', '-']:
+            # Find the next sign or end of expression
+            j = i + 1
+            while j < len(expression) and expression[j] not in ['+', '-']:
+                j += 1
+            terms.append(expression[i:j])
+            i = j
+        else:
+            i += 1
+    
+    # Parse each term
     coefficients = {}
-    
-    # First normalize the expression to handle free-form entries (bonus part)
-    expression = normalize_expression(expression)
-    
-    # Split by + or - signs, but keep the sign with the term
-    # This clever trick transforms "a - b + c" into ["a", "-b", "c"]
-    expression = expression.replace("-", "+-").replace("++", "+")
-    if expression.startswith("+"):
-        expression = expression[1:]
-        
-    terms = expression.split('+')
-    terms = [term.strip() for term in terms if term.strip()]
-    
     for term in terms:
-        term = term.strip()
-        if not term:
+        if not term.strip():
             continue
             
-        # Parse term like "-9.3 * X^2"
-        if '*' in term:
-            parts = term.split('*', 1)
-            try:
-                # Standard order: coefficient * variable
-                coefficient = float(parts[0].strip())
-                power_part = parts[1].strip()
-            except ValueError:
-                # Handle reversed order like "X^2 * 5"
-                try:
-                    coefficient = float(parts[1].strip())
-                    power_part = parts[0].strip()
-                except ValueError:
-                    raise ValueError(f"Invalid term format: {term}")
-        else:
-            # Handle terms like "X^2" (coefficient is implied 1)
-            if term.startswith("-"):
-                coefficient = -1.0
-                power_part = term[1:].strip()
+        try:
+            coef, power = parse_term(term)
+            if power in coefficients:
+                coefficients[power] += coef
             else:
-                coefficient = 1.0
-                power_part = term.strip()
-        
-        # Extract power from the term
-        if 'X^' in power_part:
-            try:
-                power = int(power_part.split('^')[1])
-            except ValueError:
-                raise ValueError(f"Invalid power in term: {term}")
-        elif 'X' in power_part:
-            power = 1  # X is X^1
-        else:
-            power = 0  # Constant term
-        
-        # Add or update coefficient for this power (combine like terms)
-        if power in coefficients:
-            coefficients[power] += coefficient
-        else:
-            coefficients[power] = coefficient
+                coefficients[power] = coef
+        except ValueError as e:
+            raise ValueError(f"Error parsing term '{term}': {str(e)}")
     
     return coefficients
 
 def parse_equation(equation):
     """
-    Parses a polynomial equation and reduces it to standard form.
-    
-    Steps:
-    1. Split into left and right sides
-    2. Parse each side to extract coefficients
-    3. Move all terms to the left side (reduced form)
-    4. Remove terms with coefficients close to zero
-    
-    Example: "5 * X^2 + 4 * X - 3 = X^2 + 2" becomes {0: -5, 1: 4, 2: 4}
+    Parse a polynomial equation and reduce it to standard form.
     """
-    # Split by equals sign
-    sides = equation.split('=')
-    if len(sides) != 2:
-        raise ValueError("Invalid equation format: must contain exactly one equals sign")
+    # Validate equation format
+    validate_equation(equation)
     
+    # Split into left and right sides
+    sides = equation.split('=')
     left_side, right_side = sides[0].strip(), sides[1].strip()
     
     # Parse both sides
@@ -156,19 +151,20 @@ def parse_equation(equation):
     right_coefficients = parse_expression(right_side)
     
     # Subtract right from left to get the reduced form
-    # This effectively moves all terms to the left side of the equation
-    for power, coefficient in right_coefficients.items():
-        if power in left_coefficients:
-            left_coefficients[power] -= coefficient
+    result = {}
+    for power, coef in left_coefficients.items():
+        result[power] = coef
+    
+    for power, coef in right_coefficients.items():
+        if power in result:
+            result[power] -= coef
         else:
-            left_coefficients[power] = -coefficient
+            result[power] = -coef
     
-    # Clean up coefficients close to zero (handle floating-point precision issues)
-    for power in list(left_coefficients.keys()):
-        if abs(left_coefficients[power]) < 1e-10:
-            del left_coefficients[power]
+    # Clean up zero coefficients (accounting for floating point precision)
+    result = {power: coef for power, coef in result.items() if abs(coef) > 1e-10}
     
-    return left_coefficients
+    return result
 
 def reduced_form(coefficients):
     """
@@ -181,15 +177,13 @@ def reduced_form(coefficients):
     Returns the formatted equation as a string
     """
     if not coefficients:
-        return "0 = 0"
+        return "Reduced form: 0 = 0"
     
     terms = []
     # Sort powers to display polynomial in standard form (ascending powers)
     for power in sorted(coefficients.keys()):
         coef = coefficients.get(power, 0)
-        if abs(coef) < 1e-10:  # Skip terms with coefficient close to zero
-            continue
-            
+        
         # Format the coefficient with the appropriate sign
         if terms and coef > 0:
             term = f"+ {coef}"  # Add plus sign for positive terms (except first)
@@ -204,33 +198,13 @@ def reduced_form(coefficients):
         terms.append(term)
     
     if not terms:
-        return "0 = 0"  # Special case: all coefficients are zero
+        return "Reduced form: 0 = 0"  # Special case: all coefficients are zero
     
     # Handle the case where the first term is positive (don't need +)
     if terms[0].startswith("+ "):
         terms[0] = terms[0][2:]
     
     return f"Reduced form: {' '.join(terms)} = 0"
-
-def get_degree(coefficients):
-    """
-    Determine the polynomial degree
-    
-    The degree of a polynomial is the highest power with a non-zero coefficient.
-    For example:
-    - 3x^2 + 2x + 1 has degree 2
-    - 5x + 3 has degree 1
-    - 7 has degree 0
-    
-    Returns:
-        int: The polynomial degree
-    """
-    # Find the highest power with non-zero coefficient
-    degree = 0
-    for power, coef in coefficients.items():
-        if abs(coef) > 1e-10 and power > degree:
-            degree = power
-    return degree
 
 def as_fraction(value):
     """
@@ -278,7 +252,7 @@ def solve(coefficients):
     
     Returns a formatted string with the solution(s)
     """
-    degree = get_degree(coefficients)
+    degree = max(coefficients.keys()) if coefficients else 0
     
     # Format output
     result = [f"Polynomial degree: {degree}"]
@@ -343,6 +317,7 @@ def main():
         print(reduced_form(coefficients))
         print(solve(coefficients))
     except Exception as e:
+        print("Error: Invalid equation format.")
         print(f"Error: {e}")
         sys.exit(1)
 
