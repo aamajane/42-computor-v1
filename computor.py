@@ -33,11 +33,11 @@ def normalize_term(term):
             coef = f"{coef}1"
         elif coef == '':
             coef = '1'
-            
+        
         # Handle power
         if not power:
             power = '^1'
-            
+        
         # Ensure multiplication symbol
         return f"{coef}*X{power}"
     
@@ -133,10 +133,10 @@ def parse_equation(equation):
         else:
             left_coefficients[power] = -coef
     
-    # Clean up zero coefficients (accounting for floating point precision)
+    # Clean up zero coefficients
     # Create a copy of keys with list() to safely modify the dictionary during iteration
     for power in list(left_coefficients.keys()):
-        if abs(left_coefficients[power]) < 1e-10:
+        if left_coefficients[power] == 0:
             del left_coefficients[power]
     
     return left_coefficients
