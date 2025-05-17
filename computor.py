@@ -20,39 +20,16 @@ def normalize_term(term):
         return f"{term}*X^0"
     
     # Match different parts of the term using regex
-    # Group 1: coefficient
-    # Group 2: X
-    # Group 3: power
-    match = re.match(r'^([-+]?\d*\.?\d*)?(\*)?X(\^[-+]?\d+)?$', term)
-    
-    if match:
-        coef, multiply, power = match.groups()
-        
-        # Handle coefficient
-        if not coef or coef in ['+', '-']:
-            coef = f"{coef}1"
-        elif coef == '':
-            coef = '1'
-        
-        # Handle power
-        if not power:
-            power = '^1'
-        
-        # Ensure multiplication symbol
-        return f"{coef}*X{power}"
-    
-    # Handle terms where X is in the middle (like 5X^2)
-    # Group 1: coefficient
-    # Group 2: power
-    match = re.match(r'^([-+]?\d*\.?\d+)X(\^[-+]?\d+)?$', term)
-    
+    match = re.match(r'^(\d*\.?\d*)?\*?X(\^[-+]?\d+)?$', term)
+
     if match:
         coef, power = match.groups()
+        if not coef:
+            coef = '1'
         if not power:
             power = '^1'
         return f"{coef}*X{power}"
     
-    # If it doesn't match our patterns, return as is (will be handled by error checking later)
     return term
 
 def parse_term(term):
@@ -60,9 +37,7 @@ def parse_term(term):
     Parse a single term like "5*X^2" into coefficient and power.
     """
     # Use regex to directly match the expected format (coefficient*X^power)
-    # Group 1: coefficient
-    # Group 2: power
-    match = re.match(r'^([-+]?\d*\.?\d+)\*X\^([-+]?\d+)$', term)
+    match = re.match(r'^(\d*\.?\d+)\*X\^([-+]?\d+)$', term)
     
     if not match:
         raise ValueError(f"Invalid term format: {term}")
