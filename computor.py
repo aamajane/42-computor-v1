@@ -6,48 +6,53 @@ from fractions import Fraction
 
 def normalize_term(term):
     """
-    Convert free-form term to standard form
+    Convert free-form term to standard form using regex pattern matching
     
-    Handles:
+    Handles all variations including:
     - Standalone numbers (5.1 → 5.1*X^0)
-    - Standalone variables (X → 1.0*X^1)
-    - Missing coefficients (X^1 → 1.0*X^1)
-    - Missing powers (5.1*X → 5.1*X^1)
+    - Standalone variables (X → 1*X^1)
+    - Missing coefficients (X^2 → 1*X^2)
+    - Missing powers (5*X → 5*X^1)
+    - No multiplication symbol (5X^2 → 5*X^2)
     """
-    # Case 1: Standalone number (no X)
+    # If it's just a number (no X)
     if 'X' not in term:
         return f"{term}*X^0"
     
-    # Case 2: Just X
-    if term == 'X':
-        return "1*X^1"
+    # Match different parts of the term using regex
+    # Group 1: coefficient (optional)
+    # Group 2: X
+    # Group 3: power (optional)
+    pattern = r'^([-+]?\d*\.?\d*)?(\*)?X(\^[-+]?\d+)?$'
+    match = re.match(pattern, term)
     
-    # Case 3: X with power but no coefficient (X^6)
-    if term.startswith('X^'):
-        return f"1*{term}"
+    if match:
+        coef, multiply, power = match.groups()
+        
+        # Handle coefficient
+        if not coef or coef in ['+', '-']:
+            coef = f"{coef}1"
+        elif coef == '':
+            coef = '1'
+            
+        # Handle power
+        if not power:
+            power = '^1'
+            
+        # Ensure multiplication symbol
+        return f"{coef}*X{power}"
     
-    # Case 4: Coefficient with X but no power
-    if term.endswith('X'):
-        # Check if there's a multiply sign
-        if '*' in term:
-            return f"{term}^1"
-        else:
-            # No multiply sign (like 4X)
-            coef = term[:-1]
-            return f"{coef}*X^1"
+    # Handle terms where X is in the middle (like 5X^2)
+    pattern = r'^([-+]?\d*\.?\d+)X(\^[-+]?\d+)?$'
+    match = re.match(pattern, term)
     
-    # Case 5: Coefficient with X and power but no multiply sign (5X^2)
-    if 'X^' in term and '*' not in term:
-        x_pos = term.find('X')
-        coef = term[:x_pos]
-        rest = term[x_pos:]
-        return f"{coef}*{rest}"
+    if match:
+        coef, power = match.groups()
+        if not power:
+            power = '^1'
+        return f"{coef}*X{power}"
     
-    # Case 6: Coefficient with X but no power (5*X)
-    if '*X' in term and '^' not in term:
-        return f"{term}^1"
-    
-    # Return the term if it's already in standard form
+    # If it doesn't match our patterns, return as is (will be handled by error checking later)
     return term
 
 def parse_term(term):
@@ -97,6 +102,7 @@ def parse_expression(expression):
         try:
             sign = -1 if term[0] == '-' else 1
             norm_term = normalize_term(term[1:])
+            print(f"Normalized term: {norm_term}")
             coef, power = parse_term(norm_term)
             if power in coefficients:
                 coefficients[power] += coef * sign
