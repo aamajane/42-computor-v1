@@ -59,10 +59,10 @@ def parse_term(term):
     """
     Parse a single normalized term like "5*X^2" or reversed like "X^2*5" into coefficient and power.
     """
-    if '*' not in term:
+    parts = term.split('*')
+    if len(parts) != 2 or not parts[0] or not parts[1]:
         raise ValueError(f"Invalid term format: {term}")
     
-    parts = term.split('*', 1)
     try:
         # Standard order
         coefficient = float(parts[0])
@@ -73,10 +73,14 @@ def parse_term(term):
             coefficient = float(parts[1])
             power_part = parts[0]
         except ValueError:
-            raise ValueError(f"Invalid term format: {term}")
+            raise ValueError(f"Invalid coefficient in term: {term}")
     
     try:
-        power = int(power_part.split('^')[1])
+        power_part = power_part.split('^')
+        if len(power_part) != 2 or not power_part[0] or not power_part[1]:
+            raise ValueError(f"Invalid power in term: {term}")
+        
+        power = int(power_part[1])
     except ValueError:
         raise ValueError(f"Invalid power in term: {term}")
     
@@ -99,17 +103,13 @@ def parse_expression(expression):
         if not term:
             continue
         
-        try:
-            sign = -1 if term[0] == '-' else 1
-            norm_term = normalize_term(term[1:])
-            print(f"Normalized term: {norm_term}")
-            coef, power = parse_term(norm_term)
-            if power in coefficients:
-                coefficients[power] += coef * sign
-            else:
-                coefficients[power] = coef * sign
-        except ValueError as e:
-            raise ValueError(f"Error parsing term '{norm_term}': {str(e)}")
+        sign = -1 if term[0] == '-' else 1
+        norm_term = normalize_term(term[1:])
+        coef, power = parse_term(norm_term)
+        if power in coefficients:
+            coefficients[power] += coef * sign
+        else:
+            coefficients[power] = coef * sign
     
     return coefficients
 
