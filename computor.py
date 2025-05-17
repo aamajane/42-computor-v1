@@ -20,11 +20,10 @@ def normalize_term(term):
         return f"{term}*X^0"
     
     # Match different parts of the term using regex
-    # Group 1: coefficient (optional)
+    # Group 1: coefficient
     # Group 2: X
-    # Group 3: power (optional)
-    pattern = r'^([-+]?\d*\.?\d*)?(\*)?X(\^[-+]?\d+)?$'
-    match = re.match(pattern, term)
+    # Group 3: power
+    match = re.match(r'^([-+]?\d*\.?\d*)?(\*)?X(\^[-+]?\d+)?$', term)
     
     if match:
         coef, multiply, power = match.groups()
@@ -43,8 +42,9 @@ def normalize_term(term):
         return f"{coef}*X{power}"
     
     # Handle terms where X is in the middle (like 5X^2)
-    pattern = r'^([-+]?\d*\.?\d+)X(\^[-+]?\d+)?$'
-    match = re.match(pattern, term)
+    # Group 1: coefficient
+    # Group 2: power
+    match = re.match(r'^([-+]?\d*\.?\d+)X(\^[-+]?\d+)?$', term)
     
     if match:
         coef, power = match.groups()
@@ -57,34 +57,22 @@ def normalize_term(term):
 
 def parse_term(term):
     """
-    Parse a single normalized term like "5*X^2" or reversed like "X^2*5" into coefficient and power.
+    Parse a single term like "5*X^2" into coefficient and power.
     """
-    parts = term.split('*')
-    if len(parts) != 2 or not parts[0] or not parts[1]:
+    # Use regex to directly match the expected format (coefficient*X^power)
+    # Group 1: coefficient
+    # Group 2: power
+    match = re.match(r'^([-+]?\d*\.?\d+)\*X\^([-+]?\d+)$', term)
+    
+    if not match:
         raise ValueError(f"Invalid term format: {term}")
     
     try:
-        # Standard order
-        coefficient = float(parts[0])
-        power_part = parts[1]
+        coefficient = float(match.group(1))
+        power = int(match.group(2))
+        return (coefficient, power)
     except ValueError:
-        # Reversed order
-        try:
-            coefficient = float(parts[1])
-            power_part = parts[0]
-        except ValueError:
-            raise ValueError(f"Invalid coefficient in term: {term}")
-    
-    try:
-        power_part = power_part.split('^')
-        if len(power_part) != 2 or not power_part[0] or not power_part[1]:
-            raise ValueError(f"Invalid power in term: {term}")
-        
-        power = int(power_part[1])
-    except ValueError:
-        raise ValueError(f"Invalid power in term: {term}")
-    
-    return (coefficient, power)
+        raise ValueError(f"Invalid numeric values in term: {term}")
 
 def parse_expression(expression):
     """
@@ -134,11 +122,9 @@ def parse_equation(equation):
     if len(sides) != 2 or not sides[0] or not sides[1]:
         raise ValueError("Equation must be in the form 'left = right'")
     
-    left_side, right_side = sides[0], sides[1]
-    
     # Parse both sides
-    left_coefficients = parse_expression(left_side)
-    right_coefficients = parse_expression(right_side)
+    left_coefficients = parse_expression(sides[0])
+    right_coefficients = parse_expression(sides[1])
     
     # Subtract right from left to get the reduced form
     for power, coef in right_coefficients.items():
