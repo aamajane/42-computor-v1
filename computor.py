@@ -6,14 +6,7 @@ from fractions import Fraction
 
 def normalize_term(term):
     """
-    Convert free-form term to standard form using regex pattern matching
-    
-    Handles all variations including:
-    - Standalone numbers (5.1 → 5.1*X^0)
-    - Standalone variables (X → 1*X^1)
-    - Missing coefficients (X^2 → 1*X^2)
-    - Missing powers (5*X → 5*X^1)
-    - No multiplication symbol (5X^2 → 5*X^2)
+    Convert free-form term to standard form using regex pattern matching.
     """
     # If it's just a number (no X)
     if 'X' not in term:
@@ -21,7 +14,7 @@ def normalize_term(term):
     
     # Match different parts of the term using regex
     match = re.match(r'^(\d*\.?\d*)?\*?X(\^[-+]?\d+)?$', term)
-
+    
     if match:
         coef, power = match.groups()
         if not coef:
@@ -34,9 +27,9 @@ def normalize_term(term):
 
 def parse_term(term):
     """
-    Parse a single term like "5*X^2" into coefficient and power.
+    Parse a single term into coefficient and power.
     """
-    # Use regex to directly match the expected format (coefficient*X^power)
+    # Match the expected format (coefficient*X^power) using regex
     match = re.match(r'^(\d*\.?\d+)\*X\^([-+]?\d+)$', term)
     
     if not match:
@@ -109,7 +102,6 @@ def parse_equation(equation):
             left_coefficients[power] = -coef
     
     # Clean up zero coefficients
-    # Create a copy of keys with list() to safely modify the dictionary during iteration
     for power in list(left_coefficients.keys()):
         if left_coefficients[power] == 0:
             del left_coefficients[power]
@@ -153,28 +145,20 @@ def as_fraction(value):
                 return str(frac.numerator)
             return str(frac)
     except:
-        pass  # If conversion fails, fall back to the string representation
+        # If conversion fails, fall back to the string representation
+        pass
     
     return str(value)
 
 def solve(coefficients):
     """
     Solve the polynomial equation based on its degree
-    
-    This method handles:
-    - Degree 0: Either all real numbers are solutions or no solution exists
-    - Degree 1: Linear equation with one solution: x = -c/b
-    - Degree 2: Quadratic equation using the discriminant method:
-        * Discriminant > 0: Two real solutions
-        * Discriminant = 0: One real solution (double root)
-        * Discriminant < 0: Two complex solutions
     """
     degree = max(coefficients.keys()) if coefficients else 0
     
     # Format output
     result = [f"Polynomial degree: {degree}"]
     
-    # Per project requirement, we can only solve up to degree 2
     if degree > 2:
         result.append("The polynomial degree is strictly greater than 2, I can't solve.")
         return "\n".join(result)
