@@ -4,106 +4,76 @@ import sys
 import re
 from fractions import Fraction
 
+def normalize_term(term):
+    """
+    Convert free-form term to standard form
+    
+    Handles:
+    - Standalone numbers (5.1 → 5.1*X^0)
+    - Standalone variables (X → 1.0*X^1)
+    - Missing coefficients (X^1 → 1.0*X^1)
+    - Missing powers (5.1*X → 5.1*X^1)
+    """
+    # Case 1: Standalone number (no X)
+    if 'X' not in term:
+        return f"{term}*X^0"
+    
+    # Case 2: Just X
+    if term == 'X':
+        return "1*X^1"
+    
+    # Case 3: X with power but no coefficient (X^6)
+    if term.startswith('X^'):
+        return f"1*{term}"
+    
+    # Case 4: Coefficient with X but no power
+    if term.endswith('X'):
+        # Check if there's a multiply sign
+        if '*' in term:
+            return f"{term}^1"
+        else:
+            # No multiply sign (like 4X)
+            coef = term[:-1]
+            return f"{coef}*X^1"
+    
+    # Case 5: Coefficient with X and power but no multiply sign (5X^2)
+    if 'X^' in term and '*' not in term:
+        x_pos = term.find('X')
+        coef = term[:x_pos]
+        rest = term[x_pos:]
+        return f"{coef}*{rest}"
+    
+    # Case 6: Coefficient with X but no power (5*X)
+    if '*X' in term and '^' not in term:
+        return f"{term}^1"
+    
+    # Return the term if it's already in standard form
+    return term
+
 def parse_term(term):
     """
-    Parse a single term like "5*X^2", "-X^3", "42", "X1", or "X*5" into coefficient and power.
-    Returns (coefficient, power) tuple.
+    Parse a single normalized term like "5*X^2" or reversed like "X^2*5" into coefficient and power.
     """
-    # Handle empty terms
-    if not term:
-        return None
-    
-    # Determine sign
-    sign = 1
-    if term.startswith('-'):
-        sign = -1
-        term = term[1:]
-    elif term.startswith('+'):
-        term = term[1:]
-    
-    # Handle constants (no variable)
-    if 'X' not in term:
-        try:
-            return (sign * float(term), 0)
-        except ValueError:
-            raise ValueError(f"Invalid constant term: {term}")
-    
-    # Handle terms with variables
-    coefficient = sign
-    power = 1  # Default power
-    
-    # Handle reversed terms like "X*5" or "X^2*3"
-    if term.startswith('X') and '*' in term:
-        # Check if coefficient is after the variable
-        parts = term.split('*', 1)
-        x_part = parts[0]
-        
-        # Extract power from x_part
-        if '^' in x_part:
-            x_parts = x_part.split('^', 1)
-            try:
-                power = int(x_parts[1])
-                if power < 0:
-                    raise ValueError("Negative powers are not supported")
-            except ValueError:
-                raise ValueError(f"Invalid power: {x_parts[1]}")
-        elif len(x_part) > 1:  # Handle "X2*5" format
-            match = re.match(r'^[X](\d+)$', x_part)
-            if match:
-                try:
-                    power = int(match.group(1))
-                    if power < 0:
-                        raise ValueError("Negative powers are not supported")
-                except ValueError:
-                    raise ValueError(f"Invalid power in term: {x_part}")
-        
-        # Extract coefficient from the second part
-        try:
-            coefficient = sign * float(parts[1])
-        except ValueError:
-            raise ValueError(f"Invalid coefficient: {parts[1]}")
-            
-        return (coefficient, power)
-    
-    # Extract coefficient (standard format: coefficient first)
-    if '*' in term:
-        parts = term.split('*', 1)
-        if parts[0]:
-            try:
-                coefficient = sign * float(parts[0])
-            except ValueError:
-                raise ValueError(f"Invalid coefficient: {parts[0]}")
-        term = parts[1]
-    elif term != 'X' and term[0] not in 'X':
-        # Handle format like "5x" without *
-        match = re.match(r'^(\d+\.?\d*)([X].*)', term)
-        if match:
-            coefficient = sign * float(match.group(1))
-            term = match.group(2)
-    
-    # Validate that term starts with X now
-    if not term.startswith('X'):
+    if '*' not in term:
         raise ValueError(f"Invalid term format: {term}")
     
-    # Extract power
-    if '^' in term:
-        parts = term.split('^', 1)
+    parts = term.split('*', 1)
+    try:
+        # Standard order
+        coefficient = float(parts[0])
+        power_part = parts[1]
+    except ValueError:
+        # Reversed order
         try:
-            power = int(parts[1])
-            if power < 0:
-                raise ValueError("Negative powers are not supported")
+            coefficient = float(parts[1])
+            power_part = parts[0]
         except ValueError:
-            raise ValueError(f"Invalid power: {parts[1]}")
-    else:
-        # Handle format like "X1" without ^ symbol
-        match = re.match(r'^[X](\d+)$', term)
-        if match:
-            try:
-                power = int(match.group(1))
-                if power < 0:
-                    raise ValueError("Negative powers are not supported")
-            except ValueError:
-                raise ValueError(f"Invalid power in term: {term}")
+            raise ValueError(f"Invalid term format: {term}")
+    
+    try:
+        power = int(power_part.split('^')[1])
+    except ValueError:
+        raise ValueError(f"Invalid power in term: {term}")
     
     return (coefficient, power)
 
@@ -125,13 +95,15 @@ def parse_expression(expression):
             continue
         
         try:
-            coef, power = parse_term(term)
+            sign = -1 if term[0] == '-' else 1
+            norm_term = normalize_term(term[1:])
+            coef, power = parse_term(norm_term)
             if power in coefficients:
-                coefficients[power] += coef
+                coefficients[power] += coef * sign
             else:
-                coefficients[power] = coef
+                coefficients[power] = coef * sign
         except ValueError as e:
-            raise ValueError(f"Error parsing term '{term}': {str(e)}")
+            raise ValueError(f"Error parsing term '{norm_term}': {str(e)}")
     
     return coefficients
 
@@ -153,8 +125,8 @@ def parse_equation(equation):
     
     # Split into left and right sides by equal sign
     sides = equation.split('=')
-    if len(sides) != 2:
-        raise ValueError("Equation must contain exactly one '=' sign.")
+    if len(sides) != 2 or not sides[0] or not sides[1]:
+        raise ValueError("Equation must be in the form 'left = right'")
     
     left_side, right_side = sides[0], sides[1]
     
