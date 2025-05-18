@@ -13,7 +13,7 @@ def normalize_term(term):
         return f"{term}*X^0"
     
     # Match different parts of the term using regex
-    match = re.match(r'^(\d*\.?\d*)?\*?X(\^[-+]?\d+)?$', term)
+    match = re.match(r'^(\d*\.?\d*)?\*?X(\^\d+)?$', term)
     
     if match:
         coef, power = match.groups()
@@ -30,7 +30,7 @@ def parse_term(term):
     Parse a single term into coefficient and power.
     """
     # Match the expected format (coefficient*X^power) using regex
-    match = re.match(r'^(\d*\.?\d+)\*X\^([-+]?\d+)$', term)
+    match = re.match(r'^(\d*\.?\d+)\*X\^(\d+)$', term)
     
     if not match:
         raise ValueError(f"Invalid term format: {term}")
